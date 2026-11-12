@@ -1,0 +1,41 @@
+{
+  "inputs": [
+    {
+      "type": "promptString",
+      "id": "jira-url",
+      "description": "Jira base URL used to dogfood the server (for example https://acme.atlassian.net)"
+    },
+    {
+      "type": "promptString",
+      "id": "jira-email",
+      "description": "Jira Cloud account email (leave empty for a Data Center PAT)"
+    },
+    {
+      "type": "promptString",
+      "id": "jira-token",
+      "description": "Jira API token or personal access token",
+      "password": true
+    }
+  ],
+  "servers": {
+    "github": {
+      "type": "http",
+      "url": "https://api.githubcopilot.com/mcp/readonly"
+    },
+    "jira-dev": {
+      "type": "stdio",
+      "command": "npx",
+      "args": [
+        "tsx",
+        "src/index.ts",
+        "--read-only",
+        "--url",
+        "${input:jira-url}",
+        "--email",
+        "${input:jira-email}",
+        "--token",
+        "${input:jira-token}"
+      ]
+    }
+  }
+}

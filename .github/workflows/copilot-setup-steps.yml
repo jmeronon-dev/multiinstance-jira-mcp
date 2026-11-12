@@ -1,0 +1,41 @@
+name: 🧰 Copilot setup steps
+on:
+  workflow_dispatch:
+  push:
+    paths:
+      - .github/workflows/copilot-setup-steps.yml
+  pull_request:
+    paths:
+      - .github/workflows/copilot-setup-steps.yml
+permissions:
+  contents: read
+concurrency:
+  group: copilot-setup-steps-${{ github.ref }}
+  cancel-in-progress: true
+jobs:
+  # The job id must be exactly `copilot-setup-steps` or the Copilot cloud agent ignores this file.
+  # It has no `name:` so the check keeps the same name as the id.
+  copilot-setup-steps:
+    runs-on: ubuntu-latest
+    # This limit also covers the agent's own work, not just the setup. 59 is the documented maximum.
+    timeout-minutes: 59
+    permissions:
+      contents: read
+    env:
+      # Tests use a fake Jira: the agent never needs a real browser for browser SSO.
+      PLAYWRIGHT_SKIP_BROWSER_DOWNLOAD: "1"
+    steps:
+      - name: 📥 Check out repository
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - name: 🟢 Set up Node.js
+        uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
+        with:
+          node-version: 22
+          cache: npm
+      - name: 📦 Install dependencies
+        run: npm ci
+      - name: ✅ Verify the toolchain
+        run: |
+          set -euo pipefail
+          node --version
+          npm run typecheck

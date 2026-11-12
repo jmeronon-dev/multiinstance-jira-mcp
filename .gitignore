@@ -1,0 +1,18 @@
+node_modules/
+dist/
+coverage/
+*.tgz
+*.log
+.env
+.env.*
+!.env.example
+.DS_Store
+
+# Local state if JIRA_MCP_HOME points inside the repo
+.multiinstance-jira-mcp/
+session.json
+browser-profile/
+
+# Local tooling (not needed to build or run the project)
+.graphify/
+.graphifyignore

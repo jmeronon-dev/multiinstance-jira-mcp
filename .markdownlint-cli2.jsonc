@@ -1,0 +1,15 @@
+{
+  // Documentation is written as long prose lines and may use bare URLs and inline HTML.
+  "config": {
+    "default": true,
+    "MD013": false,
+    // Keep a Changelog repeats "### Added" under each release.
+    "MD024": { "siblings_only": true },
+    "MD033": false,
+    "MD034": false,
+    "MD041": false,
+    "MD060": false
+  },
+  "globs": ["README.md", "CHANGELOG.md", "AGENTS.md", "docs/**/*.md"],
+  "gitignore": true
+}

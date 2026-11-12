@@ -26,6 +26,9 @@
     "test:watch": "vitest",
     "install-browser": "playwright install chromium",
     "inspect": "npx @modelcontextprotocol/inspector node dist/index.js",
+    "docs:lint": "npx --yes markdownlint-cli2@0.24.0",
+    "docs:links": "node scripts/check-markdown-links.mjs",
+    "factory:test": "bash .github/scripts/lights-out-guard.test.sh",
     "prepublishOnly": "npm run typecheck && npm test && npm run build"
   },
   "keywords": [

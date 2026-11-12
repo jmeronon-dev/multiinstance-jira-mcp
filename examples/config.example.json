@@ -1,0 +1,27 @@
+{
+  "defaultInstance": "cloud",
+  "loginTimeoutSeconds": 300,
+  "keepAliveSeconds": 300,
+  "instances": {
+    "cloud": {
+      "url": "https://acme.atlassian.net",
+      "email": "me@acme.com",
+      "tokenEnv": "JIRA_CLOUD_TOKEN",
+      "projects": ["WEB", "APP"],
+      "defaultProject": "WEB",
+      "description": "Product development (Jira Cloud)"
+    },
+    "corp": {
+      "url": "https://jira.corp.local/jira",
+      "tokenEnv": "JIRA_CORP_PAT",
+      "projects": ["OPS", "INFRA"],
+      "description": "Internal operations (Data Center, personal access token)"
+    },
+    "partner": {
+      "url": "https://jira.partner.com",
+      "auth": "browser",
+      "readOnly": true,
+      "description": "Partner site behind corporate SSO (read-only)"
+    }
+  }
+}

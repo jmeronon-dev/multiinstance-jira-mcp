@@ -1,0 +1,37 @@
+{
+  "inputs": [
+    {
+      "id": "jiraCloudToken",
+      "type": "promptString",
+      "description": "Jira Cloud API token",
+      "password": true
+    },
+    {
+      "id": "jiraCorpPat",
+      "type": "promptString",
+      "description": "Jira Data Center personal access token",
+      "password": true
+    }
+  ],
+  "servers": {
+    "jira": {
+      "type": "stdio",
+      "command": "npx",
+      "args": [
+        "-y",
+        "multiinstance-jira-mcp",
+        "--instance", "cloud",
+        "--url", "https://acme.atlassian.net",
+        "--email", "me@acme.com",
+        "--token", "${input:jiraCloudToken}",
+        "--instance", "corp",
+        "--url", "https://jira.corp.local/jira",
+        "--token", "${input:jiraCorpPat}",
+        "--projects", "OPS,INFRA",
+        "--instance", "partner",
+        "--url", "https://jira.partner.com",
+        "--auth", "browser"
+      ]
+    }
+  }
+}

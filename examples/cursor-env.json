@@ -1,0 +1,25 @@
+{
+  "mcpServers": {
+    "jira": {
+      "command": "npx",
+      "args": ["-y", "multiinstance-jira-mcp"],
+      "env": {
+        "JIRA_INSTANCES": "cloud,corp,partner",
+        "JIRA_DEFAULT_INSTANCE": "cloud",
+
+        "JIRA_CLOUD_URL": "https://acme.atlassian.net",
+        "JIRA_CLOUD_EMAIL": "me@acme.com",
+        "JIRA_CLOUD_API_TOKEN": "<ATLASSIAN_API_TOKEN>",
+        "JIRA_CLOUD_PROJECTS": "WEB,APP",
+
+        "JIRA_CORP_URL": "https://jira.corp.local/jira",
+        "JIRA_CORP_PAT": "<DATA_CENTER_PAT>",
+        "JIRA_CORP_PROJECTS": "OPS,INFRA",
+
+        "JIRA_PARTNER_URL": "https://jira.partner.com",
+        "JIRA_PARTNER_AUTH": "browser",
+        "JIRA_PARTNER_READ_ONLY": "true"
+      }
+    }
+  }
+}

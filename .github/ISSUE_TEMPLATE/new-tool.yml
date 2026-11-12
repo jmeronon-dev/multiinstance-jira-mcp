@@ -1,0 +1,105 @@
+# Field IDs are stable and used by the skills `triage-issue` and `add-mcp-tool`:
+#   tool_name, purpose, endpoints, inputs, output, kind, instances,
+#   acceptance_checklist, mandatory_checks
+name: "🧰 New MCP tool"
+description: "Propose a new `jira_*` tool for the server. An agent uses these fields to implement it with the add-mcp-tool skill."
+title: "🧰 Add tool: "
+labels: ["🧰 new-tool", "🔍 needs-triage"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Fill in the fields with as much detail as you can: the agent turns them into the tool definition, the client method and the tests.
+
+  - type: input
+    id: tool_name
+    attributes:
+      label: Tool name
+      description: "snake_case with the `jira_` prefix."
+      placeholder: "jira_list_worklogs"
+    validations:
+      required: true
+
+  - type: textarea
+    id: purpose
+    attributes:
+      label: Purpose
+      description: What the assistant will be able to do with it and why the existing tools are not enough.
+    validations:
+      required: true
+
+  - type: textarea
+    id: endpoints
+    attributes:
+      label: Jira REST endpoints
+      description: "Endpoints for Cloud (REST v3 / Agile 1.0) and Data Center (REST v2). Say so if one deployment does not support it."
+      placeholder: |
+        Cloud: GET /rest/api/3/issue/{key}/worklog
+        Data Center: GET /rest/api/2/issue/{key}/worklog
+    validations:
+      required: true
+
+  - type: textarea
+    id: inputs
+    attributes:
+      label: Inputs
+      description: "Arguments, types, whether they are optional and their validation. `instance` and issue keys follow the shared conventions."
+      placeholder: |
+        - issue: issue key, `instance:KEY` or browse URL (required)
+        - startedAfter: ISO date (optional)
+    validations:
+      required: true
+
+  - type: textarea
+    id: output
+    attributes:
+      label: Output
+      description: Compact shape returned to the assistant (fields, grouping per instance...).
+    validations:
+      required: true
+
+  - type: dropdown
+    id: kind
+    attributes:
+      label: Kind of operation
+      description: Determines the MCP annotations and whether read-only mode blocks it.
+      options:
+        - Read-only
+        - Write (non-destructive)
+        - Destructive
+    validations:
+      required: true
+
+  - type: dropdown
+    id: instances
+    attributes:
+      label: Multi-instance behaviour
+      options:
+        - One instance, routed automatically
+        - Fan-out over several instances (instances / allInstances)
+        - Works across two instances (like jira_copy_issue)
+    validations:
+      required: true
+
+  - type: checkboxes
+    id: acceptance_checklist
+    attributes:
+      label: Acceptance criteria
+      description: What the tool must meet when it is done.
+      options:
+        - label: "Registered with `defineTool`, with title, description, zod input and the right annotations."
+        - label: "Client method in `src/jira/client.ts` covering Cloud and Data Center."
+        - label: "Tests in `tests/` against the fake Jira for both deployments."
+        - label: "Write tools call `ensureWritable` and respect read-only mode."
+        - label: "Documented in the README tools table and in the CHANGELOG."
+
+  - type: checkboxes
+    id: mandatory_checks
+    attributes:
+      label: Mandatory confirmations
+      description: Required to accept the proposal.
+      options:
+        - label: "The tool does not store or return credentials, cookies or tokens."
+          required: true
+        - label: "It does not add a runtime dependency, or the proposal justifies it."
+          required: true

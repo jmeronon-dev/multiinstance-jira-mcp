@@ -1,0 +1,73 @@
+name: "🏭 Software factory change"
+description: "Propose a change to CODEOWNERS, Actions workflows, Issue templates, MCP, skills, hooks, instructions, labels or rulesets. These are higher-risk changes: they never go 🌙 lights-out and always need human review."
+title: "🏭 "
+labels: ["🏭 software-factory", "🔍 needs-triage"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        This form is for changes to the software factory. They are higher-risk changes: they are never automated with 🌙 lights-out and a person always reviews them before merging.
+  - type: dropdown
+    id: component
+    attributes:
+      label: Component
+      description: Choose one or more components affected by the proposal.
+      multiple: true
+      options:
+        - "CODEOWNERS"
+        - "Actions workflows"
+        - "Agentic workflows (gh-aw)"
+        - "Issue templates"
+        - "MCP"
+        - "Skills"
+        - "Agent hooks"
+        - "Instructions / AGENTS.md"
+        - "Labels"
+        - "Rulesets"
+    validations:
+      required: true
+  - type: textarea
+    id: problem_goal
+    attributes:
+      label: Problem or goal
+      description: What problem the change solves or what goal it pursues.
+    validations:
+      required: true
+  - type: textarea
+    id: proposal
+    attributes:
+      label: Proposal
+      description: Describe the concrete change, with the affected files or settings.
+    validations:
+      required: true
+  - type: textarea
+    id: security_impact
+    attributes:
+      label: Security and permissions impact
+      description: Which permissions, secrets, tokens or attack surfaces change and why it is safe.
+    validations:
+      required: true
+  - type: textarea
+    id: acceptance_criteria
+    attributes:
+      label: Acceptance criteria
+      description: Verifiable conditions that close the change.
+      placeholder: "- [ ] ..."
+    validations:
+      required: true
+  - type: textarea
+    id: rollback_plan
+    attributes:
+      label: Rollback plan
+      description: How to undo the change if it causes problems.
+    validations:
+      required: true
+  - type: checkboxes
+    id: safety_checks
+    attributes:
+      label: Safety checks
+      options:
+        - label: "It does not expose secrets or tokens."
+          required: true
+        - label: "It keeps least-privilege permissions."
+          required: true

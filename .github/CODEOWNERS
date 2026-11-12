@@ -1,0 +1,18 @@
+# There is intentionally no `*` rule. Lights-out PRs (created by Copilot) that touch
+# docs or low-risk code cannot get a code owner review: Copilot cannot approve, and
+# the approval of the person who launched it does not count on its PRs. The required
+# checks (`🧪 validate` and `📚 docs`) are the safeguard for everything without owner.
+# Only governance, credential handling and the supply chain keep owners; see
+# docs/guardrails.md.
+
+# Agent instructions, CI/workflows and repository governance.
+AGENTS.md @jmeronon-dev
+.github/ @jmeronon-dev
+.vscode/ @jmeronon-dev
+
+# Credential handling: API tokens, PATs, browser SSO and stored cookies.
+src/auth/ @jmeronon-dev
+
+# Supply chain: runtime and development dependencies.
+package.json @jmeronon-dev
+package-lock.json @jmeronon-dev

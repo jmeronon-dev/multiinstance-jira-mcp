@@ -81,6 +81,7 @@ The server speaks MCP over **stdio**. Your client starts it, so you normally don
   }
 }
 ```
+
 </details>
 
 <details>
@@ -106,6 +107,7 @@ The server speaks MCP over **stdio**. Your client starts it, so you normally don
   }
 }
 ```
+
 </details>
 
 <details>
@@ -129,6 +131,7 @@ The server speaks MCP over **stdio**. Your client starts it, so you normally don
   }
 }
 ```
+
 </details>
 
 <details>
@@ -149,6 +152,7 @@ The server speaks MCP over **stdio**. Your client starts it, so you normally don
   }
 }
 ```
+
 </details>
 
 More ready-to-copy files live in [`examples/`](examples).
@@ -331,7 +335,7 @@ All tools accept `instance` unless noted otherwise. Issue parameters accept `KEY
 
 ## Files on disk
 
-```
+```text
 ~/.multiinstance-jira-mcp/            (override with --home / JIRA_MCP_HOME)
 ├── config.json                       optional config file
 └── instances/
@@ -381,7 +385,7 @@ npm run inspect     # MCP Inspector against dist/index.js
 
 Project layout:
 
-```
+```text
 src/
 ├── index.ts                 entry point & CLI subcommands (serve, login, logout, instances)
 ├── cli.ts                   argument parser (instance-scoped flag blocks)
@@ -393,6 +397,17 @@ src/
 └── tools/                   MCP tool definitions (instances, issues, metadata, transfer)
 tests/                       vitest suites with a fake Jira
 ```
+
+## Contributing
+
+This repository works as an agentic *software factory*:
+
+1. Open an Issue with one of the templates (bug, enhancement, new MCP tool or software factory change). Blank Issues are disabled.
+2. The `🚦 Triage` agentic workflow classifies it (status, lights, complexity and area) and comments the next step.
+3. An agent (or a person) implements it following [`AGENTS.md`](AGENTS.md) and the skills in `.github/skills/`.
+4. Every PR must pass `🧪 validate` and `📚 docs`. Documentation-only and small, low-risk changes can merge on their own (🌙 lights-out); everything else is reviewed by a person.
+
+The full process is in the [project wiki](docs/index.md), starting with [Software factory](docs/software-factory.md).
 
 ## Acknowledgements
 

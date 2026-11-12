@@ -1,0 +1,176 @@
+name: 🌙 Lights-out assign
+
+# Moves a triaged Issue to the autonomous lane: swaps 💡 lights-on for
+# 🌙 lights-out and assigns the Copilot cloud agent. It runs on every
+# `labeled` event and evaluates all the labels of the Issue, because the order
+# in which triage adds them is not guaranteed. It never checks out or runs
+# code from the repository.
+on:
+  issues:
+    types: [labeled]
+
+# Labels and comments use the repository GITHUB_TOKEN. Assigning Copilot needs
+# a user token (secret COPILOT_ASSIGN_TOKEN), used only in the assignment step.
+permissions:
+  contents: read
+  issues: write
+
+concurrency:
+  group: lights-out-assign-${{ github.event.issue.number }}
+  cancel-in-progress: false
+
+env:
+  # Area labels that allow the autonomous lane. One label per line; add lines to
+  # allow more areas. 🔐 auth, 🧭 routing and ⚙️ config are never allowed.
+  ALLOWED_AREA_LABELS: |
+    📝 documentation
+    🧩 tools
+
+jobs:
+  assign:
+    name: 🌙 Evaluate and assign
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    if: github.event.issue.state == 'open' && !github.event.issue.pull_request
+    steps:
+      - name: 🔐 Check who added the label
+        id: actor
+        env:
+          GH_TOKEN: ${{ github.token }}
+          GH_REPO: ${{ github.repository }}
+          SENDER: ${{ github.event.sender.login }}
+        run: |
+          set -euo pipefail
+
+          permission="$(gh api "repos/$GH_REPO/collaborators/$SENDER/permission" --jq '.permission' || echo none)"
+          case "$permission" in
+            admin|write|maintain) echo "allowed=true" >> "$GITHUB_OUTPUT" ;;
+            *)
+              echo "allowed=false" >> "$GITHUB_OUTPUT"
+              echo "$SENDER has '$permission' permission; nothing to do."
+              ;;
+          esac
+
+      - name: 🔎 Evaluate the Issue
+        id: eval
+        if: steps.actor.outputs.allowed == 'true'
+        env:
+          GH_TOKEN: ${{ github.token }}
+          GH_REPO: ${{ github.repository }}
+          ISSUE_NUMBER: ${{ github.event.issue.number }}
+        run: |
+          set -euo pipefail
+
+          if ! [[ "$ISSUE_NUMBER" =~ ^[0-9]+$ ]]; then
+            echo "::error::Invalid Issue number."
+            exit 1
+          fi
+          owner="${GH_REPO%%/*}"
+          repo="${GH_REPO##*/}"
+
+          # Read the current state, not the event payload, which may be stale.
+          # shellcheck disable=SC2016 # GraphQL variables, not shell expansions
+          issue_json="$(gh api graphql \
+            -F owner="$owner" -F repo="$repo" -F number="$ISSUE_NUMBER" \
+            -f query='
+              query($owner: String!, $repo: String!, $number: Int!) {
+                repository(owner: $owner, name: $repo) {
+                  issue(number: $number) {
+                    state
+                    labels(first: 100) { nodes { name } }
+                    assignees(first: 20) { nodes { login } }
+                    closedByPullRequestsReferences(first: 20, includeClosedPrs: false) {
+                      nodes { state author { login } }
+                    }
+                  }
+                }
+              }')"
+
+          allowed_areas="$(jq -Rsc 'split("\n") | map(select(length > 0))' <<<"$ALLOWED_AREA_LABELS")"
+
+          result="$(jq -c --argjson areas "$allowed_areas" '
+            .data.repository.issue as $i
+            | ($i.labels.nodes | map(.name)) as $labels
+            | ($i.assignees.nodes | map(.login | ascii_downcase)) as $assignees
+            | {
+                open: ($i.state == "OPEN"),
+                labels_ok: (
+                  ($labels | index("✅ agent-ready") != null)
+                  and ($labels | index("🟢 complexity-low") != null)
+                  and ($labels | any(. as $l | $areas | index($l) != null))
+                  and ($labels | index("🏭 software-factory") == null)
+                  and ($labels | index("🔐 auth") == null)
+                ),
+                has_lights_on: ($labels | index("💡 lights-on") != null),
+                has_lights_out: ($labels | index("🌙 lights-out") != null),
+                already_assigned: ($assignees | any(startswith("copilot"))),
+                has_copilot_pr: (
+                  $i.closedByPullRequestsReferences.nodes
+                  | any(.state == "OPEN" and ((.author.login // "") | ascii_downcase | startswith("copilot")))
+                )
+              }' <<<"$issue_json")"
+          echo "$result"
+
+          if jq -e '.open and .labels_ok and (.already_assigned | not) and (.has_copilot_pr | not)' <<<"$result" >/dev/null; then
+            echo "proceed=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "proceed=false" >> "$GITHUB_OUTPUT"
+            echo "Conditions not met or already handled; nothing to do."
+          fi
+          echo "has_lights_on=$(jq -r '.has_lights_on' <<<"$result")" >> "$GITHUB_OUTPUT"
+          echo "has_lights_out=$(jq -r '.has_lights_out' <<<"$result")" >> "$GITHUB_OUTPUT"
+
+      - name: 🤖 Assign the Copilot cloud agent
+        if: steps.eval.outputs.proceed == 'true'
+        env:
+          GH_TOKEN: ${{ secrets.COPILOT_ASSIGN_TOKEN }}
+          GH_REPO: ${{ github.repository }}
+          ISSUE_NUMBER: ${{ github.event.issue.number }}
+          BASE_BRANCH: ${{ github.event.repository.default_branch }}
+        run: |
+          set -euo pipefail
+
+          if [ -z "$GH_TOKEN" ]; then
+            echo "::error::Secret COPILOT_ASSIGN_TOKEN is not configured."
+            exit 1
+          fi
+
+          jq -n --arg repo "$GH_REPO" --arg base "$BASE_BRANCH" '{
+            assignees: ["copilot-swe-agent[bot]"],
+            agent_assignment: { target_repo: $repo, base_branch: $base }
+          }' | gh api --method POST \
+            -H "Accept: application/vnd.github+json" \
+            -H "X-GitHub-Api-Version: 2022-11-28" \
+            "repos/$GH_REPO/issues/$ISSUE_NUMBER/assignees" \
+            --input - --silent
+
+      - name: 🏷️ Switch to lights-out
+        if: steps.eval.outputs.proceed == 'true'
+        env:
+          GH_TOKEN: ${{ github.token }}
+          GH_REPO: ${{ github.repository }}
+          ISSUE_NUMBER: ${{ github.event.issue.number }}
+          HAS_LIGHTS_ON: ${{ steps.eval.outputs.has_lights_on }}
+          HAS_LIGHTS_OUT: ${{ steps.eval.outputs.has_lights_out }}
+        run: |
+          set -euo pipefail
+
+          if [ "$HAS_LIGHTS_ON" = "true" ]; then
+            gh api -X DELETE "repos/$GH_REPO/issues/$ISSUE_NUMBER/labels/$(jq -rn --arg l '💡 lights-on' '$l|@uri')" --silent
+          fi
+          if [ "$HAS_LIGHTS_OUT" != "true" ]; then
+            gh api -X POST "repos/$GH_REPO/issues/$ISSUE_NUMBER/labels" -f 'labels[]=🌙 lights-out' --silent
+          fi
+
+      - name: 💬 Comment the reason
+        if: steps.eval.outputs.proceed == 'true'
+        env:
+          GH_TOKEN: ${{ github.token }}
+          GH_REPO: ${{ github.repository }}
+          ISSUE_NUMBER: ${{ github.event.issue.number }}
+        run: |
+          set -euo pipefail
+
+          # shellcheck disable=SC2016 # backticks are literal Markdown
+          body='🌙 Moved to the lights-out lane: it has `✅ agent-ready`, `🟢 complexity-low` and an allowed area, and it is not a software factory or authentication change. Assigned to the Copilot cloud agent.'
+          gh api -X POST "repos/$GH_REPO/issues/$ISSUE_NUMBER/comments" -f body="$body" --silent

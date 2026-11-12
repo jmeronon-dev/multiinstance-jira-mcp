@@ -1,0 +1,121 @@
+name: 🏷️ PR labels
+
+# Copies the labels of the Issues a PR closes onto the PR, and labels PRs that
+# change the triage rules file. It only adds labels, never removes them. It
+# runs from the base branch and never checks out or runs PR code: it only
+# calls the GitHub API with the repository GITHUB_TOKEN.
+on:
+  pull_request_target:
+    types: [opened, reopened, edited, ready_for_review, synchronize]
+  workflow_dispatch:
+    inputs:
+      pr_number:
+        description: "Pull request number to label"
+        required: true
+        type: number
+
+permissions:
+  contents: read
+  issues: read
+  pull-requests: write
+
+concurrency:
+  group: pr-labels-${{ github.event.pull_request.number || inputs.pr_number }}
+  cancel-in-progress: true
+
+jobs:
+  inherit-labels:
+    name: 🏷️ Inherit labels from linked Issues
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - name: 🔗 Copy labels from closing Issues
+        env:
+          GH_TOKEN: ${{ github.token }}
+          GH_REPO: ${{ github.repository }}
+          PR_NUMBER: ${{ github.event.pull_request.number || inputs.pr_number }}
+        run: |
+          set -euo pipefail
+
+          # Triage, status and resolution labels describe the Issue, not the PR.
+          excluded='["🔍 needs-triage","✅ agent-ready","📐 needs-spec","💬 needs-info","🧑‍🏫 triage-corrected","♻️ duplicate","⛔ wontfix","🚫 invalid"]'
+
+          if ! [[ "$PR_NUMBER" =~ ^[0-9]+$ ]]; then
+            echo "::error::Invalid pull request number."
+            exit 1
+          fi
+
+          owner="${GH_REPO%%/*}"
+          repo="${GH_REPO##*/}"
+
+          # shellcheck disable=SC2016 # GraphQL variables, not shell expansions
+          pr_json="$(gh api graphql \
+            -F owner="$owner" -F repo="$repo" -F number="$PR_NUMBER" \
+            -f query='
+              query($owner: String!, $repo: String!, $number: Int!) {
+                repository(owner: $owner, name: $repo) {
+                  pullRequest(number: $number) {
+                    closingIssuesReferences(first: 20) {
+                      nodes { labels(first: 50) { nodes { name } } }
+                    }
+                    labels(first: 100) { nodes { name } }
+                  }
+                }
+              }')"
+
+          labels=()
+          while IFS= read -r label; do
+            [ -n "$label" ] && labels+=("$label")
+          done < <(jq -r --argjson excluded "$excluded" '
+            .data.repository.pullRequest as $pr
+            | ($pr.labels.nodes | map(.name)) as $current
+            | [$pr.closingIssuesReferences.nodes[].labels.nodes[].name]
+            | unique
+            | map(select((. as $l | $excluded | index($l) | not) and (. as $l | $current | index($l) | not)))
+            | .[]' <<<"$pr_json")
+
+          if [ "${#labels[@]}" -eq 0 ]; then
+            echo "No labels to add."
+            exit 0
+          fi
+
+          args=()
+          for label in "${labels[@]}"; do
+            args+=(-f "labels[]=$label")
+          done
+
+          gh api -X POST "repos/$GH_REPO/issues/$PR_NUMBER/labels" "${args[@]}" --silent
+          printf 'Added label: %s\n' "${labels[@]}"
+
+      - name: 🔁 Label PRs that update the triage rules
+        env:
+          GH_TOKEN: ${{ github.token }}
+          GH_REPO: ${{ github.repository }}
+          PR_NUMBER: ${{ github.event.pull_request.number || inputs.pr_number }}
+        run: |
+          set -euo pipefail
+
+          rules_file=".github/skills/triage-issue/references/rules.md"
+          rule_labels=("🔁 triage-learning" "🏭 software-factory" "🤖 agents" "💡 lights-on")
+
+          if ! [[ "$PR_NUMBER" =~ ^[0-9]+$ ]]; then
+            echo "::error::Invalid pull request number."
+            exit 1
+          fi
+
+          # Only file names are read from the API; PR code is never checked out or run.
+          changed_files="$(gh api --paginate "repos/$GH_REPO/pulls/$PR_NUMBER/files" --jq '.[].filename')"
+
+          if ! grep -qxF "$rules_file" <<<"$changed_files"; then
+            echo "The PR does not touch $rules_file."
+            exit 0
+          fi
+
+          args=()
+          for label in "${rule_labels[@]}"; do
+            args+=(-f "labels[]=$label")
+          done
+
+          # Adding a label the PR already has is a no-op.
+          gh api -X POST "repos/$GH_REPO/issues/$PR_NUMBER/labels" "${args[@]}" --silent
+          printf 'Ensured label: %s\n' "${rule_labels[@]}"

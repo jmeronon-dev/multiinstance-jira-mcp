@@ -1,0 +1,106 @@
+# Field IDs are stable and used by the triage skill `triage-issue`.
+name: "🐛 Report a bug"
+description: "Report a failure of the server or one of its tools, with enough data to reproduce it."
+title: "🐛 "
+labels: ["🐛 bug", "🔍 needs-triage"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Thanks for reporting a bug. The title must start with an emoji: 🐛 is preloaded, but you can change it for a more specific one.
+
+        ⚠️ **Never paste tokens, PATs, passwords, cookies or `session.json` contents.** Redact internal hostnames if they are sensitive.
+
+  - type: checkboxes
+    id: duplicate-check
+    attributes:
+      label: Before you start
+      options:
+        - label: I searched the existing Issues for duplicates.
+          required: true
+
+  - type: textarea
+    id: what-happens
+    attributes:
+      label: What happens
+      description: Describe the failure in your own words.
+    validations:
+      required: true
+
+  - type: textarea
+    id: steps-to-reproduce
+    attributes:
+      label: Steps to reproduce
+      description: Exact steps, including the tool called and its arguments (redacted).
+      placeholder: |
+        1. Start the server with `--instance cloud --url https://acme.atlassian.net ...`
+        2. Call `jira_search` with `{ "jql": "project = WEB", "allInstances": true }`
+        3. ...
+    validations:
+      required: true
+
+  - type: textarea
+    id: expected-result
+    attributes:
+      label: Expected result
+      description: What should happen instead.
+    validations:
+      required: true
+
+  - type: dropdown
+    id: deployment
+    attributes:
+      label: Jira deployment
+      options:
+        - Jira Cloud
+        - Jira Data Center / Server
+        - Several instances (mixed)
+    validations:
+      required: true
+
+  - type: dropdown
+    id: auth
+    attributes:
+      label: Authentication method
+      options:
+        - API token (basic)
+        - Personal access token (bearer)
+        - Browser SSO (browser)
+        - Not related to authentication
+
+  - type: input
+    id: tool
+    attributes:
+      label: Tool or command
+      description: MCP tool (for example `jira_copy_issue`) or CLI subcommand (`login`, `instances`...).
+      placeholder: "jira_search"
+
+  - type: input
+    id: version
+    attributes:
+      label: Versions
+      description: Server version (`multiinstance-jira-mcp --version`), Node.js version and operating system.
+      placeholder: "0.1.0, Node 22.12, macOS 15"
+    validations:
+      required: true
+
+  - type: input
+    id: client
+    attributes:
+      label: MCP client
+      description: Claude Desktop, Claude Code, Cursor, VS Code Copilot, OpenCode...
+
+  - type: textarea
+    id: logs
+    attributes:
+      label: Logs
+      description: Server logs with `--log-level debug`, **redacted**.
+      render: shell
+
+  - type: checkboxes
+    id: redaction
+    attributes:
+      label: Mandatory confirmation
+      options:
+        - label: I removed tokens, PATs, passwords and cookies from everything I pasted.
+          required: true

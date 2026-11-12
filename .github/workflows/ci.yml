@@ -1,13 +1,22 @@
-name: CI
+name: 🧪 CI
 
 on:
   push:
-    branches: [main]
+    branches: [main, develop]
   pull_request:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ci-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
 
 jobs:
   test:
+    name: 🧪 test (${{ matrix.os }}, node ${{ matrix.node }})
     runs-on: ${{ matrix.os }}
+    timeout-minutes: 15
     strategy:
       fail-fast: false
       matrix:
@@ -16,13 +25,38 @@ jobs:
     env:
       PLAYWRIGHT_SKIP_BROWSER_DOWNLOAD: "1"
     steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-node@v4
+      - name: 📥 Check out repository
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - name: 🟢 Set up Node.js
+        uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
         with:
           node-version: ${{ matrix.node }}
           cache: npm
-      - run: npm ci
-      - run: npm run typecheck
-      - run: npm test
-      - run: npm run build
-      - run: node dist/index.js --version
+      - name: 📦 Install dependencies
+        run: npm ci
+      - name: 🔎 Typecheck
+        run: npm run typecheck
+      - name: 🧪 Test
+        run: npm test
+      - name: 🏗️ Build
+        run: npm run build
+      - name: 🚀 Smoke test the CLI
+        run: node dist/index.js --version
+
+  # Single, stable check name for the branch ruleset: it only passes when every
+  # cell of the matrix passed. Do not rename it without updating the ruleset.
+  validate:
+    name: 🧪 validate
+    needs: test
+    if: ${{ always() }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - name: 🚦 Check the matrix result
+        env:
+          RESULT: ${{ needs.test.result }}
+        run: |
+          echo "Matrix result: $RESULT"
+          test "$RESULT" = success

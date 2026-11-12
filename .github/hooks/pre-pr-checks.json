@@ -1,0 +1,20 @@
+{
+  "version": 1,
+  "hooks": {
+    "postToolUse": [
+      {
+        "type": "command",
+        "matcher": "edit|create|apply_patch|str_replace_editor",
+        "command": "node .github/hooks/scripts/post-edit-check.mjs",
+        "timeoutSec": 90
+      }
+    ],
+    "agentStop": [
+      {
+        "type": "command",
+        "command": "node .github/hooks/scripts/final-check.mjs",
+        "timeoutSec": 300
+      }
+    ]
+  }
+}

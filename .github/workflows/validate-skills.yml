@@ -1,0 +1,389 @@
+name: 🥷 Validate skills
+
+on:
+  pull_request:
+    paths:
+      - ".github/skills/**"
+      - ".github/workflows/validate-skills.yml"
+  push:
+    branches: [main, develop]
+    paths:
+      - ".github/skills/**"
+      - ".github/workflows/validate-skills.yml"
+
+permissions:
+  contents: read
+
+# Newer pull request runs supersede older ones so stale results never overwrite the comment.
+concurrency:
+  group: validate-skills-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+
+env:
+  WAZA_NO_UPDATE_CHECK: "1"
+
+jobs:
+  validate:
+    name: 🧩 validate skills
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - name: 📥 Check out repository
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          fetch-depth: 0
+          persist-credentials: false
+
+      - name: 🔎 Detect skills
+        id: skills
+        shell: bash
+        run: |
+          shopt -s nullglob
+          skills=(.github/skills/*/)
+          if [ "${#skills[@]}" -eq 0 ]; then
+            echo "No skills found; skipping validation."
+            echo "found=false" >> "$GITHUB_OUTPUT"
+          else
+            echo "found=true" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: 🔐 Install checksum-verified waza
+        id: install
+        if: steps.skills.outputs.found == 'true'
+        shell: bash
+        env:
+          WAZA_VERSION: v0.40.0
+          WAZA_SHA256: d09117a3c631f44a00a6c362462c951aed83c87751e8c25f39916a77d1013802
+        run: |
+          mkdir -p "$RUNNER_TEMP/waza-bin"
+          cd "$RUNNER_TEMP/waza-bin"
+          curl --fail --silent --show-error --location \
+            "https://github.com/microsoft/waza/releases/download/${WAZA_VERSION}/waza-linux-amd64" \
+            --output waza
+          echo "${WAZA_SHA256}  waza" | sha256sum --check
+          chmod +x waza
+          echo "$RUNNER_TEMP/waza-bin" >> "$GITHUB_PATH"
+          ./waza --version
+
+      # The validation steps below never stop the job early: each one records its
+      # raw waza output in a report directory and the final step enforces the result.
+      - name: ✅ Check skill readiness
+        id: check
+        if: ${{ !cancelled() && steps.install.outcome == 'success' }}
+        continue-on-error: true
+        shell: bash
+        run: |
+          report="$RUNNER_TEMP/skill-report"
+          mkdir -p "$report"
+          shopt -s nullglob
+          failed=0
+          for skill in .github/skills/*/; do
+            name=$(basename "$skill")
+            echo "Checking $skill"
+            if ! waza check "./$skill" --format json > "$report/check-$name.json" 2> "$report/check-$name.err"; then
+              echo "::error::waza check failed for $skill"
+              failed=1
+              continue
+            fi
+            cat "$report/check-$name.json"
+            if ! jq -e '(.skills | length > 0) and all(.skills[]; .ready == true)' \
+              "$report/check-$name.json" > /dev/null; then
+              echo "::error::Skill $skill is not ready; see the waza report above."
+              failed=1
+            fi
+          done
+          exit "$failed"
+
+      - name: 🔢 Count skill tokens
+        id: tokens
+        if: ${{ !cancelled() && steps.install.outcome == 'success' }}
+        continue-on-error: true
+        shell: bash
+        run: |
+          report="$RUNNER_TEMP/skill-report"
+          mkdir -p "$report"
+          shopt -s nullglob
+          failed=0
+          for skill in .github/skills/*/; do
+            name=$(basename "$skill")
+            if ! waza tokens count "./$skill" --format json > "$report/tokens-$name.json" 2> "$report/tokens-$name.err"; then
+              echo "::error::waza tokens count failed for $skill"
+              failed=1
+              continue
+            fi
+            waza tokens count "./$skill"
+          done
+          exit "$failed"
+
+      - name: 🛫 Preflight optional evaluation files without running models
+        id: preflight
+        if: ${{ !cancelled() && steps.install.outcome == 'success' }}
+        continue-on-error: true
+        shell: bash
+        run: |
+          report="$RUNNER_TEMP/skill-report"
+          mkdir -p "$report"
+          failed=0
+          while IFS= read -r -d '' evaluation; do
+            out="$report/preflight-${evaluation//\//__}"
+            if ! waza preflight "$evaluation" --format json > "$out.json" 2> "$out.err"; then
+              echo "::error::waza preflight failed for $evaluation"
+              failed=1
+            fi
+            cat "$out.err"
+          done < <(find .github/skills -type f -name eval.yaml -print0)
+          exit "$failed"
+
+      - name: 📊 Compare skill tokens with the base branch
+        id: compare
+        if: ${{ !cancelled() && steps.install.outcome == 'success' }}
+        continue-on-error: true
+        shell: bash
+        env:
+          # A push compares against the branch before the push, not its new HEAD.
+          BASE_REF: ${{ github.event.pull_request.base.sha || github.event.before }}
+        run: |
+          report="$RUNNER_TEMP/skill-report"
+          mkdir -p "$report"
+          if [[ "$BASE_REF" =~ ^0+$ ]]; then
+            echo "::notice::Initial push has no baseline; readiness checks enforce token budgets."
+            touch "$report/compare-skipped"
+            exit 0
+          fi
+          git rev-parse --verify "${BASE_REF}^{commit}"
+          # Without --skills waza only sees SKILL.md; running it repo-wide also covers
+          # references/. The result is then restricted to the skills directory and the
+          # threshold is enforced here, so unrelated markdown never fails this check.
+          waza tokens compare "$BASE_REF" HEAD --threshold 10 --format json \
+            > "$report/compare-raw.json" 2> "$report/compare.err" || true
+          if ! jq -e '.files' "$report/compare-raw.json" > /dev/null 2>&1; then
+            cat "$report/compare.err"
+            echo "::error::waza tokens compare produced no valid result."
+            exit 1
+          fi
+          jq '.files |= map(select(.file | startswith(".github/skills/")))' \
+            "$report/compare-raw.json" > "$report/compare.json"
+          jq -r '.files[] | "\(.status)\t\(.before.tokens // 0)\t\(.after.tokens // 0)\t\(.file)"' "$report/compare.json"
+          if jq -e '[.files[] | select(.exceeded == true)] | length > 0' "$report/compare.json" > /dev/null; then
+            echo "::error::A skill file grew more than 10% compared with the base."
+            exit 1
+          fi
+
+      - name: 🧾 Build job summary and PR comment
+        id: report
+        if: ${{ !cancelled() }}
+        shell: bash
+        env:
+          FOUND: ${{ steps.skills.outputs.found }}
+          INSTALL_OUTCOME: ${{ steps.install.outcome }}
+          CHECK_OUTCOME: ${{ steps.check.outcome }}
+          TOKENS_OUTCOME: ${{ steps.tokens.outcome }}
+          PREFLIGHT_OUTCOME: ${{ steps.preflight.outcome }}
+          COMPARE_OUTCOME: ${{ steps.compare.outcome }}
+        run: |
+          report="$RUNNER_TEMP/skill-report"
+          mkdir -p "$report"
+          run_url="$GITHUB_SERVER_URL/$GITHUB_REPOSITORY/actions/runs/$GITHUB_RUN_ID"
+          marker='<!-- validate-skills-report -->'
+          # Strip characters that could break out of the code fences or inject markup.
+          safe='def safe: gsub("[`<>]"; "") | .[0:300];'
+          fence='```'
+          table="$report/table.md"
+          general="$report/general.md"
+          sections="$report/sections.md"
+          : > "$table"; : > "$general"; : > "$sections"
+          failed=false
+
+          for outcome in "$INSTALL_OUTCOME" "$CHECK_OUTCOME" "$TOKENS_OUTCOME" "$PREFLIGHT_OUTCOME" "$COMPARE_OUTCOME"; do
+            if [ "$outcome" = failure ]; then failed=true; fi
+          done
+
+          if [ "$FOUND" != true ]; then
+            printf '%s\n' 'No skills in `.github/skills/`; nothing to validate.' > "$table"
+          else
+            printf '%s\n' \
+              '| Skill | Ready (`waza check`) | Tokens (SKILL.md / limit · total) | Compared with base | Evaluations |' \
+              '| --- | --- | --- | --- | --- |' > "$table"
+          fi
+
+          if [ "$INSTALL_OUTCOME" = failure ]; then
+            printf '%s\n' '- Could not install `waza` (download or checksum failed). Check the install step in the run log.' >> "$general"
+          fi
+
+          shopt -s nullglob
+          if [ "$FOUND" = true ] && [ "$INSTALL_OUTCOME" = success ]; then
+            compare="$report/compare.json"
+            compare_ok=false
+            if [ -s "$compare" ] && jq -e '.files' "$compare" > /dev/null 2>&1; then compare_ok=true; fi
+            if [ "$COMPARE_OUTCOME" = failure ] && [ "$compare_ok" = false ]; then
+              printf '%s\n' '- `waza tokens compare` failed without results. Check that the base branch exists and the checkout has full history.' >> "$general"
+            fi
+
+            for skill in .github/skills/*/; do
+              name=$(basename "$skill")
+              disp=${name//[^A-Za-z0-9._-]/_}
+              prefix=".github/skills/$name/"
+              problems="$report/problems-$name.txt"
+              : > "$problems"
+              check="$report/check-$name.json"
+
+              ready='⚠️ no data'; budget='—'
+              if [ -s "$check" ] && jq -e '.skills | length > 0' "$check" > /dev/null 2>&1; then
+                level=$(jq -r '.skills[0].compliance.level // "?"' "$check")
+                budget=$(jq -r '.skills[0].tokenBudget | "\(.count) / \(.limit)"' "$check")
+                if jq -e 'all(.skills[]; .ready == true)' "$check" > /dev/null; then
+                  ready="✅ ready ($level)"
+                else
+                  ready="❌ not ready ($level)"
+                  jq -r "$safe"'
+                    .skills[] | (
+                      ((.compliance.issues // [])[] | "- \(.message | safe)"),
+                      (if .tokenBudget.exceeded then "- Token budget exceeded: \(.tokenBudget.count) / \(.tokenBudget.limit)" else empty end),
+                      ((.specCompliance // [])[] | select(.passed == false) | "- \(.summary | safe)"),
+                      (if .links.passed == false then "- Broken links in SKILL.md" else empty end),
+                      ((.nextSteps // [])[] | select(test("evaluation suite|waza dev") | not) | "  Suggestion: \(. | safe)")
+                    )' "$check" >> "$problems"
+                fi
+              elif [ "$CHECK_OUTCOME" != skipped ]; then
+                echo "- \`waza check\` did not produce a valid report for this skill." >> "$problems"
+              fi
+
+              total='?'
+              if [ -s "$report/tokens-$name.json" ]; then
+                total=$(jq -r '.totalTokens // "?"' "$report/tokens-$name.json" 2> /dev/null || echo '?')
+              fi
+              tokens="$budget · $total"
+
+              delta='⚠️ no data'
+              if [ -e "$report/compare-skipped" ]; then
+                delta='n/a (no base)'
+              elif [ "$compare_ok" = true ]; then
+                delta=$(jq -r --arg p "$prefix" '
+                  .threshold as $t
+                  | [.files[] | select(.file | startswith($p))]
+                  | if length == 0 then "➡️ unchanged"
+                    else map("\(if .exceeded == true then "❌" else "✅" end) \(.file[$p | length:] | gsub("[^A-Za-z0-9._/-]"; "_")): \(.before.tokens // 0) → \(.after.tokens // 0)") | join("<br>")
+                    end' "$compare")
+                jq -r --arg p "$prefix" '
+                  .threshold as $t
+                  | .files[] | select(.file | startswith($p))
+                  | select(.exceeded == true)
+                  | "- \(.file[$p | length:] | gsub("[^A-Za-z0-9._/-]"; "_")): \(.before.tokens // 0) → \(.after.tokens // 0) tokens (+\(.percentChange | floor)% vs base, threshold \($t)%). Shrink the file or split its content."' \
+                  "$compare" >> "$problems"
+              fi
+
+              evals='—'
+              eval_files=0; eval_errors=0
+              for pre in "$report"/preflight-*.json; do
+                if [ "$(jq -r '.source // ""' "$pre" 2> /dev/null)" != "" ] \
+                  && jq -e --arg p "$prefix" '.source | startswith($p)' "$pre" > /dev/null 2>&1; then
+                  eval_files=$((eval_files + 1))
+                  errors=$(jq '[.diagnostics[]? | select(.severity == "error")] | length' "$pre")
+                  eval_errors=$((eval_errors + errors))
+                  jq -r "$safe"'.diagnostics[]? | select(.severity == "error") | "- Preflight \(.source | safe): \(.message | safe) \(.remediation | safe)"' "$pre" >> "$problems"
+                fi
+              done
+              if [ "$eval_files" -gt 0 ]; then
+                if [ "$eval_errors" -eq 0 ]; then evals="✅ $eval_files"; else evals="❌ $eval_errors errors"; fi
+              fi
+
+              printf '| `%s` | %s | %s | %s | %s |\n' "$disp" "$ready" "$tokens" "$delta" "$evals" >> "$table"
+              if [ -s "$problems" ]; then
+                {
+                  printf '### `%s`\n\n%s text\n' "$disp" "$fence"
+                  cat "$problems"
+                  printf '%s\n\n' "$fence"
+                  printf '%s\n\n' "How to fix it: run \`waza check ./.github/skills/$disp/\` locally, fix the points above and push again."
+                } >> "$sections"
+              fi
+            done
+          fi
+
+          if [ -s "$general" ] || [ -s "$sections" ]; then failed=true; fi
+
+          if [ "$failed" = true ]; then
+            title='## ❌ Validate skills: there are problems to fix'
+          else
+            title='## ✅ Validate skills: all good'
+          fi
+
+          {
+            printf '%s\n\n' "$title"
+            cat "$table"
+            printf '\n'
+            if [ -s "$general" ]; then printf '### General\n\n'; cat "$general"; printf '\n'; fi
+            cat "$sections"
+            printf '[See the full run](%s)\n' "$run_url"
+          } > "$report/body.md"
+
+          cat "$report/body.md" >> "$GITHUB_STEP_SUMMARY"
+          { printf '%s\n' "$marker"; cat "$report/body.md"; } > "$report/comment.md"
+          echo "$failed" > "$report/failed"
+
+      - name: 📤 Upload report for the PR comment job
+        if: ${{ !cancelled() && github.event_name == 'pull_request' }}
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+        with:
+          name: skill-validation-report
+          path: |
+            ${{ runner.temp }}/skill-report/comment.md
+            ${{ runner.temp }}/skill-report/failed
+          if-no-files-found: ignore
+          retention-days: 1
+
+      - name: 🚦 Fail when a validation step failed
+        if: ${{ !cancelled() }}
+        shell: bash
+        env:
+          OUTCOMES: ${{ steps.install.outcome }} ${{ steps.check.outcome }} ${{ steps.tokens.outcome }} ${{ steps.preflight.outcome }} ${{ steps.compare.outcome }} ${{ steps.report.outcome }}
+        run: |
+          for outcome in $OUTCOMES; do
+            if [ "$outcome" = failure ]; then
+              echo "::error::Skill validation failed; see the job summary for details."
+              exit 1
+            fi
+          done
+
+  comment:
+    name: 💬 Comment on pull request
+    needs: validate
+    # Fork pull requests only get a read-only token, so they rely on the job summary.
+    if: ${{ !cancelled() && github.event_name == 'pull_request' && github.event.pull_request.head.repo.full_name == github.repository }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    permissions:
+      pull-requests: write
+    # Serialize comment writes per pull request to avoid duplicate sticky comments.
+    concurrency:
+      group: validate-skills-comment-${{ github.event.pull_request.number }}
+      cancel-in-progress: false
+    steps:
+      - name: 📥 Download validation report
+        uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4.3.0
+        with:
+          name: skill-validation-report
+          path: report
+
+      - name: 💬 Create or update the sticky comment
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+          PR_NUMBER: ${{ github.event.pull_request.number }}
+        run: |
+          if [ ! -s report/comment.md ]; then
+            echo "::notice::No validation report to comment."
+            exit 0
+          fi
+          marker='<!-- validate-skills-report -->'
+          comment_id=$(gh api --paginate "repos/$GITHUB_REPOSITORY/issues/$PR_NUMBER/comments" \
+            --jq ".[] | select(.user.login == \"github-actions[bot]\" and (.body | contains(\"$marker\"))) | .id" | head -n 1)
+          if [ -n "$comment_id" ]; then
+            gh api --method PATCH "repos/$GITHUB_REPOSITORY/issues/comments/$comment_id" \
+              --field body=@report/comment.md > /dev/null
+            echo "Updated comment $comment_id."
+          else
+            gh api --method POST "repos/$GITHUB_REPOSITORY/issues/$PR_NUMBER/comments" \
+              --field body=@report/comment.md > /dev/null
+            echo "Created comment."
+          fi
+

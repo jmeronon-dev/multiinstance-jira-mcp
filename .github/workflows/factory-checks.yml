@@ -1,0 +1,125 @@
+name: 🏭 Factory checks
+
+# Validates the software factory itself: Issue templates, label definitions,
+# the lights-out guardrails and the Agent Hooks. Runs only when they change.
+on:
+  pull_request:
+    paths:
+      - ".github/ISSUE_TEMPLATE/**"
+      - ".github/labels.yml"
+      - ".github/scripts/**"
+      - ".github/hooks/**"
+      - ".github/workflows/factory-checks.yml"
+  push:
+    branches: [main, develop]
+    paths:
+      - ".github/ISSUE_TEMPLATE/**"
+      - ".github/labels.yml"
+      - ".github/scripts/**"
+      - ".github/hooks/**"
+      - ".github/workflows/factory-checks.yml"
+
+permissions:
+  contents: read
+
+concurrency:
+  group: factory-checks-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+
+jobs:
+  templates:
+    name: 🧾 Issue templates and labels
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - name: 📥 Check out repository
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      - name: 🐍 Set up Python
+        uses: actions/setup-python@6d4fd22b20465ccc0f7354476588e8df7c9ca0e0 # v7.1.0
+        with:
+          python-version: "3.12"
+
+      - name: 📦 Install check-jsonschema
+        run: python -m pip install "check-jsonschema==0.39.0"
+
+      - name: ✅ Validate issue form templates
+        run: |
+          shopt -s nullglob
+          forms=()
+          for file in .github/ISSUE_TEMPLATE/*.yml .github/ISSUE_TEMPLATE/*.yaml; do
+            if [ "$(basename "$file")" != "config.yml" ]; then
+              forms+=("$file")
+            fi
+          done
+          if [ "${#forms[@]}" -eq 0 ]; then
+            echo "No issue form templates found; skipping."
+            exit 0
+          fi
+          check-jsonschema --builtin-schema vendor.github-issue-forms "${forms[@]}"
+
+      - name: ⚙️ Validate issue template config
+        run: check-jsonschema --builtin-schema vendor.github-issue-config .github/ISSUE_TEMPLATE/config.yml
+
+      - name: 🏷️ Check that templates only use declared labels
+        shell: bash
+        run: |
+          set -euo pipefail
+          declared="$(yq -r '.[].name' .github/labels.yml | sort -u)"
+          missing=0
+          for file in .github/ISSUE_TEMPLATE/*.yml; do
+            [ "$(basename "$file")" = config.yml ] && continue
+            while IFS= read -r label; do
+              [ -z "$label" ] && continue
+              if ! grep -qxF -- "$label" <<<"$declared"; then
+                echo "::error file=$file::Label \"$label\" is not declared in .github/labels.yml"
+                missing=1
+              fi
+            done < <(yq -r '.labels[]?' "$file")
+          done
+          exit "$missing"
+
+  guardrails:
+    name: 🛡️ Lights-out guardrails
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - name: 📥 Check out repository
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      - name: 🧪 Run the guardrail cases
+        run: bash .github/scripts/lights-out-guard.test.sh
+
+  hooks:
+    name: 🪝 Agent Hooks
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - name: 📥 Check out repository
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      - name: 🟢 Set up Node.js
+        uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
+        with:
+          node-version: 22
+
+      - name: 🔎 Check the hook scripts parse and the config is valid JSON
+        run: |
+          set -euo pipefail
+          for script in .github/hooks/scripts/*.mjs; do
+            node --check "$script"
+          done
+          jq -e '.version == 1 and (.hooks.postToolUse | length > 0) and (.hooks.agentStop | length > 0)' \
+            .github/hooks/pre-pr-checks.json > /dev/null
+
+      - name: 🪝 Post-edit hook stays silent on a file it does not check
+        run: |
+          set -euo pipefail
+          out="$(echo '{"toolArgs":{"path":"LICENSE"}}' | node .github/hooks/scripts/post-edit-check.mjs)"
+          test -z "$out"

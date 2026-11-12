@@ -1,0 +1,49 @@
+name: 🏷️ Sync labels
+
+# Creates or updates the labels declared in .github/labels.yml. It never deletes
+# labels, so labels created by hand survive. Runs when the file changes on the
+# default branch, or by hand.
+on:
+  push:
+    branches: [main, develop]
+    paths:
+      - ".github/labels.yml"
+      - ".github/workflows/sync-labels.yml"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  issues: write
+
+concurrency:
+  group: sync-labels
+  cancel-in-progress: false
+
+jobs:
+  sync:
+    name: 🏷️ Create or update labels
+    # Only the default branch is the source of truth for labels.
+    if: github.ref_name == github.event.repository.default_branch
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - name: 📥 Check out repository
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+          sparse-checkout: .github/labels.yml
+          sparse-checkout-cone-mode: false
+
+      - name: 🏷️ Apply labels
+        env:
+          GH_TOKEN: ${{ github.token }}
+          GH_REPO: ${{ github.repository }}
+        run: |
+          set -euo pipefail
+          yq -o=json '.' .github/labels.yml | jq -c '.[]' | while IFS= read -r label; do
+            name="$(jq -r '.name' <<<"$label")"
+            color="$(jq -r '.color' <<<"$label")"
+            description="$(jq -r '.description // ""' <<<"$label")"
+            gh label create "$name" --color "$color" --description "$description" --force
+            echo "✅ $name" >> "$GITHUB_STEP_SUMMARY"
+          done

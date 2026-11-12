@@ -1,0 +1,139 @@
+name: 🔀 Lights-out auto-merge
+
+# Enables auto-merge on pull requests from the Copilot cloud agent that come
+# from a 🌙 lights-out Issue and pass the guardrails in
+# .github/scripts/lights-out-guard.sh. The required checks (🧪 validate and
+# 📚 docs) remain the final barrier.
+#
+# It uses pull_request_target on purpose: the workflow and the guard script
+# always come from the default branch, never from the pull request, so a PR
+# cannot edit them to reach the user token. It never checks out or runs code
+# from the PR.
+on:
+  pull_request_target:
+    types: [review_requested, ready_for_review, synchronize, edited]
+  workflow_dispatch:
+    inputs:
+      pr_number:
+        description: Pull request number to evaluate (same guardrails as the automatic run)
+        required: true
+        type: string
+
+permissions:
+  contents: read
+  pull-requests: write
+  issues: read
+
+concurrency:
+  group: lights-out-automerge-${{ github.event.pull_request.number || inputs.pr_number }}
+  cancel-in-progress: false
+
+env:
+  # Size limits of the guardrails; raise them here to allow bigger diffs.
+  MAX_CHANGED_LINES: "150"
+  MAX_CHANGED_FILES: "10"
+
+jobs:
+  automerge:
+    name: 🔀 Evaluate and enable auto-merge
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    # A manual run must use the workflow from the default branch, which holds the secret's guardrails.
+    if: github.ref_name == github.event.repository.default_branch
+    steps:
+      - name: 📥 Check out the guard script from the default branch
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          ref: ${{ github.event.repository.default_branch }}
+          sparse-checkout: .github/scripts
+          persist-credentials: false
+
+      - name: 🔎 Evaluate the guardrails
+        id: eval
+        env:
+          GH_TOKEN: ${{ github.token }}
+          GH_REPO: ${{ github.repository }}
+          PR_NUMBER: ${{ github.event.pull_request.number || inputs.pr_number }}
+          GITHUB_REPOSITORY: ${{ github.repository }}
+          BASE_BRANCH: ${{ github.event.repository.default_branch }}
+        run: |
+          set -euo pipefail
+
+          if ! [[ "$PR_NUMBER" =~ ^[0-9]+$ ]]; then
+            echo "::error::Invalid pull request number."
+            exit 1
+          fi
+          owner="${GH_REPO%%/*}"
+          repo="${GH_REPO##*/}"
+
+          # Read the current state, not the event payload, which may be stale.
+          gh api "repos/$GH_REPO/pulls/$PR_NUMBER" > "$RUNNER_TEMP/pr.json"
+          gh api --paginate --slurp "repos/$GH_REPO/pulls/$PR_NUMBER/files?per_page=100" \
+            | jq -c 'add // []' > "$RUNNER_TEMP/files.json"
+          # shellcheck disable=SC2016 # GraphQL variables, not shell expansions
+          gh api graphql \
+            -F owner="$owner" -F repo="$repo" -F number="$PR_NUMBER" \
+            -f query='
+              query($owner: String!, $repo: String!, $number: Int!) {
+                repository(owner: $owner, name: $repo) {
+                  pullRequest(number: $number) {
+                    closingIssuesReferences(first: 20) {
+                      nodes { number state labels(first: 100) { nodes { name } } }
+                    }
+                  }
+                }
+              }' \
+            --jq '.data.repository.pullRequest.closingIssuesReferences.nodes // error("no closingIssuesReferences in the response")' \
+            > "$RUNNER_TEMP/issues.json" || {
+              echo "::error::Could not read the Issues linked to PR #$PR_NUMBER. Check that the job has 'issues: read'."
+              exit 1
+            }
+
+          echo "head_sha=$(jq -r '.head.sha' "$RUNNER_TEMP/pr.json")" >> "$GITHUB_OUTPUT"
+          echo "is_copilot=$(jq -r '(.user.login == "Copilot")' "$RUNNER_TEMP/pr.json")" >> "$GITHUB_OUTPUT"
+
+          if reasons="$(bash .github/scripts/lights-out-guard.sh \
+            "$RUNNER_TEMP/pr.json" "$RUNNER_TEMP/files.json" "$RUNNER_TEMP/issues.json")"; then
+            echo "eligible=true" >> "$GITHUB_OUTPUT"
+            echo "✅ PR #$PR_NUMBER meets the guardrails." >> "$GITHUB_STEP_SUMMARY"
+          else
+            echo "eligible=false" >> "$GITHUB_OUTPUT"
+            {
+              echo "⏭️ PR #$PR_NUMBER is not eligible for lights-out auto-merge:"
+              while IFS= read -r reason; do echo "- $reason"; done <<<"$reasons"
+            } | tee -a "$GITHUB_STEP_SUMMARY"
+          fi
+
+      - name: 🛑 Cancel a stale auto-merge
+        if: steps.eval.outputs.eligible == 'false' && steps.eval.outputs.is_copilot == 'true'
+        env:
+          GH_TOKEN: ${{ github.token }}
+          GH_REPO: ${{ github.repository }}
+          PR_NUMBER: ${{ github.event.pull_request.number || inputs.pr_number }}
+        # A later push may have made an already-approved PR ineligible.
+        run: gh pr merge "$PR_NUMBER" --disable-auto || true
+
+      # The user token is used only in this step. A merge made with the
+      # GITHUB_TOKEN does not trigger the push workflows on the default branch,
+      # and taking the PR out of draft with it would not re-run the checks.
+      - name: 🔀 Mark ready and enable auto-merge (squash)
+        if: steps.eval.outputs.eligible == 'true'
+        env:
+          GH_TOKEN: ${{ secrets.COPILOT_ASSIGN_TOKEN }}
+          GH_REPO: ${{ github.repository }}
+          PR_NUMBER: ${{ github.event.pull_request.number || inputs.pr_number }}
+          HEAD_SHA: ${{ steps.eval.outputs.head_sha }}
+        run: |
+          set -euo pipefail
+
+          if [ -z "$GH_TOKEN" ]; then
+            echo "::error::Secret COPILOT_ASSIGN_TOKEN is not configured."
+            exit 1
+          fi
+
+          if [ "$(gh pr view "$PR_NUMBER" --json isDraft --jq '.isDraft')" = "true" ]; then
+            gh pr ready "$PR_NUMBER"
+          fi
+          # Pin the commit evaluated when auto-merge is enabled.
+          gh pr merge "$PR_NUMBER" --auto --squash --match-head-commit "$HEAD_SHA"
+          echo "🔀 Auto-merge enabled on PR #$PR_NUMBER" >> "$GITHUB_STEP_SUMMARY"

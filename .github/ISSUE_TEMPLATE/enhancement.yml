@@ -1,0 +1,78 @@
+# Field IDs are stable and used by the triage skill `triage-issue`:
+#   problem              -> "Problem or goal" (required)
+#   proposal             -> "Proposal" (required)
+#   area                 -> "Area" (dropdown, optional)
+#   acceptance-criteria  -> "Acceptance criteria" (required)
+#   alternatives         -> "Alternatives considered" (optional)
+#   checklist            -> "Checks" (two required checkboxes)
+name: "✨ Enhancement"
+description: "Propose an improvement of an existing behaviour. For a brand-new MCP tool, use the new tool template."
+title: "✨ "
+labels: ["✨ enhancement", "🔍 needs-triage"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Thanks for proposing an improvement. The title must start with an emoji: ✨ is preloaded, but you can change it for a more specific one.
+
+  - type: textarea
+    id: problem
+    attributes:
+      label: Problem or goal
+      description: What problem exists or what do you want to achieve? Who is affected?
+    validations:
+      required: true
+
+  - type: textarea
+    id: proposal
+    attributes:
+      label: Proposal
+      description: What change do you propose?
+    validations:
+      required: true
+
+  - type: dropdown
+    id: area
+    attributes:
+      label: Area
+      description: Main area of the change.
+      options:
+        - Authentication (tokens, PAT, browser SSO)
+        - Instances and routing
+        - Existing tools
+        - Jira REST client / ADF
+        - Configuration (CLI, env, config file)
+        - Documentation
+        - CI and release
+        - Other
+    validations:
+      required: false
+
+  - type: textarea
+    id: acceptance-criteria
+    attributes:
+      label: Acceptance criteria
+      description: Verifiable conditions that prove the change is done.
+      placeholder: |
+        - [ ] ...
+        - [ ] ...
+    validations:
+      required: true
+
+  - type: textarea
+    id: alternatives
+    attributes:
+      label: Alternatives considered
+      description: Other options and why you discarded them.
+    validations:
+      required: false
+
+  - type: checkboxes
+    id: checklist
+    attributes:
+      label: Checks
+      options:
+        - label: It is not a new MCP tool (that has its own template).
+          required: true
+        - label: It keeps Jira Cloud and Data Center working, or the proposal explains the difference.
+          required: true

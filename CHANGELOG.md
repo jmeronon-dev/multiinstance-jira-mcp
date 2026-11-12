@@ -4,6 +4,17 @@ All notable changes to this project are documented here. The format follows
 [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) and the project uses
 [Semantic Versioning](https://semver.org/).
 
+## [Unreleased]
+
+### Added
+
+- Agentic software factory: Issue templates (bug, enhancement, new MCP tool, software factory change), declared labels synced by `🏷️ Sync labels`, and `CODEOWNERS` for governance, credential handling and the supply chain.
+- Agentic workflows (gh-aw): `🚦 Triage` with the `triage-issue` skill, `🔁 Triage learn` to improve the triage rules from human corrections, and `📚 Docs sync` to keep `docs/` and `README.md` in sync with the code.
+- 🌙 Lights-out lane: `🌙 Lights-out assign` assigns simple Issues to the Copilot cloud agent and `🔀 Lights-out auto-merge` enables auto-merge on its small PRs that pass the guardrails in `.github/scripts/lights-out-guard.sh`.
+- Agent instructions (`AGENTS.md`, `.github/copilot-instructions.md`), the `add-mcp-tool` skill, Agent Hooks that run the CI checks before the agent finishes, and `copilot-setup-steps.yml`.
+- CI: required `🧪 validate` and `📚 docs` checks, `🏭 Factory checks`, `🥷 Validate skills`, `🏷️ PR labels` and Dependabot for actions and npm. Actions are pinned by commit SHA.
+- Project wiki in `docs/` and `npm run docs:lint`, `docs:links` and `factory:test` scripts.
+
 ## [0.1.0] - 2026-11-12
 
 ### Added

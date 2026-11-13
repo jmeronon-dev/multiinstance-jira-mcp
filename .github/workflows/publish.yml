@@ -1,0 +1,78 @@
+name: 🚀 Publish to npm
+
+# Stages a new version of the package on npm when a GitHub Release is published.
+# It authenticates with npm trusted publishing (OIDC): there is no npm token in
+# the repository. `npm stage publish` keeps the version private until a
+# maintainer approves it on npmjs.com with 2FA. See docs/releasing.md.
+on:
+  release:
+    types: [published]
+
+permissions:
+  contents: read
+
+concurrency:
+  group: publish-npm
+  cancel-in-progress: false
+
+jobs:
+  publish:
+    name: 🚀 Stage the package on npm
+    # Only the upstream repository can publish. Pre-releases are not published
+    # yet: they would need their own dist-tag.
+    if: ${{ github.repository == 'jmeronon-dev/multiinstance-jira-mcp' && !github.event.release.prerelease }}
+    # Trusted publishing only works on GitHub-hosted runners.
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    # Must match the environment of the trusted publisher on npmjs.com.
+    environment: npm
+    permissions:
+      contents: read
+      id-token: write
+    env:
+      PLAYWRIGHT_SKIP_BROWSER_DOWNLOAD: "1"
+    steps:
+      - name: 📥 Check out repository
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      - name: 🟢 Set up Node.js
+        uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
+        with:
+          node-version: 24
+          registry-url: https://registry.npmjs.org
+          package-manager-cache: false
+
+      # `npm stage publish` with OIDC needs npm 11.15.0 or later.
+      - name: ⬆️ Install a pinned npm
+        run: npm install --global npm@11.21.2
+
+      - name: 🏷️ Check that the tag matches package.json
+        env:
+          TAG: ${{ github.event.release.tag_name }}
+        run: |
+          expected="v$(node -p 'require("./package.json").version')"
+          if [ "$TAG" != "$expected" ]; then
+            echo "::error::Release tag $TAG does not match package.json version ($expected)."
+            exit 1
+          fi
+
+      - name: 📦 Install dependencies
+        run: npm ci
+
+      - name: 🔎 Typecheck
+        run: npm run typecheck
+
+      - name: 🧪 Test
+        run: npm test
+
+      - name: 🏗️ Build
+        run: npm run build
+
+      - name: 🚀 Smoke test the CLI
+        run: node dist/index.js --version
+
+      # The checks above replace prepublishOnly, so lifecycle scripts are skipped.
+      - name: 📤 Stage publish
+        run: npm stage publish --ignore-scripts

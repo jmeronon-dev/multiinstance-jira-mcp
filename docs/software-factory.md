@@ -69,6 +69,10 @@ An agent implements the Issue following `AGENTS.md` and `.github/copilot-instruc
 
 `.github/CODEOWNERS` assigns an owner only to governance (`AGENTS.md`, `.github/`, `.vscode/`), credential handling (`src/auth/`) and the supply chain (`package.json`, `package-lock.json`). There is no `*` rule. Who reviews what is detailed in [Guardrails](guardrails.md#who-reviews-what). Agents never merge on their own: integration needs explicit approval, except for the 🌙 lights-out lane described in [Lights-out](lights-out.md).
 
+## 6. Release
+
+A GitHub Release published by a maintainer runs `🚀 Publish to npm` (`publish.yml`), which stages the package on npm with trusted publishing; a maintainer approves it with 2FA. See [Releasing](releasing.md).
+
 ## One-time repository setup
 
 1. Merge this setup and run *Actions → 🏷️ Sync labels → Run workflow*.
@@ -76,3 +80,4 @@ An agent implements the Issue following `AGENTS.md` and `.github/copilot-instruc
 3. Enable *Settings → General → Allow auto-merge*.
 4. Create a ruleset for the default branch that requires a pull request, a code owner review, and the checks `🧪 validate` and `📚 docs`.
 5. Enable the Copilot cloud agent for the repository.
+6. Follow the [one-time setup for npm releases](releasing.md#one-time-setup).

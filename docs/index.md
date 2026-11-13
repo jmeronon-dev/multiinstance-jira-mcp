@@ -18,6 +18,7 @@ The repository also works as a *software factory*: ideas enter as Issues, they a
 | [Lights-out](lights-out.md) | Which changes merge without human review, why, and the workflows that do it. |
 | [Guardrails](guardrails.md) | Rules that must not be broken: credentials, deployments, routing, process and reviews. |
 | [Skills and MCP](skills-and-mcp.md) | Agent skills, Agent Hooks, MCP configuration and how they are validated. |
+| [Releasing](releasing.md) | How a version reaches npm with trusted publishing, the one-time setup and the release steps. |
 
 ## Where else to look
 

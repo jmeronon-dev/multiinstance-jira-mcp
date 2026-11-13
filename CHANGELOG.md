@@ -14,6 +14,12 @@ All notable changes to this project are documented here. The format follows
 - Agent instructions (`AGENTS.md`, `.github/copilot-instructions.md`), the `add-mcp-tool` skill, Agent Hooks that run the CI checks before the agent finishes, and `copilot-setup-steps.yml`.
 - CI: required `🧪 validate` and `📚 docs` checks, `🏭 Factory checks`, `🥷 Validate skills`, `🏷️ PR labels` and Dependabot for actions and npm. Actions are pinned by commit SHA.
 - Project wiki in `docs/` and `npm run docs:lint`, `docs:links` and `factory:test` scripts.
+- `🚀 Publish to npm` workflow: a published GitHub Release stages the package on npm with trusted publishing (OIDC) and provenance, and a maintainer approves it with 2FA. See `docs/releasing.md`.
+- `repository`, `homepage` and `bugs` fields in `package.json`.
+
+### Changed
+
+- The build no longer emits source maps, which pointed to `src/` files that are not published, and `npm run build` empties `dist/` first.
 
 ## [0.1.0] - 2026-11-12
 

@@ -398,6 +398,8 @@ src/
 tests/                       vitest suites with a fake Jira
 ```
 
+Releases are published to npm from GitHub Actions with trusted publishing; see [Releasing](docs/releasing.md).
+
 ## Contributing
 
 This repository works as an agentic *software factory*:

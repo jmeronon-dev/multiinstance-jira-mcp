@@ -380,6 +380,11 @@ export class JiraClient {
     return Array.isArray(statuses) ? statuses : [];
   }
 
+  async listIssueLinkTypes(): Promise<any[]> {
+    const data = await this.request<{ issueLinkTypes?: any[] }>("GET", this.api("/issueLinkType"));
+    return Array.isArray(data?.issueLinkTypes) ? data.issueLinkTypes : [];
+  }
+
   async listBoards(options: { projectKey?: string; name?: string; maxResults?: number } = {}): Promise<any[]> {
     const data = await this.request<{ values?: any[] }>("GET", this.agile("/board"), {
       query: {

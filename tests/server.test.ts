@@ -36,6 +36,10 @@ async function setup(readOnly = false) {
     "POST jira.corp.local /rest/api/2/issue/OPS-9/comment": () => ({ status: 201, json: { id: "c1" } }),
     "GET acme.atlassian.net /rest/api/3/myself": () => ({ json: { accountId: "1", displayName: "Cloud Me" } }),
     "GET jira.corp.local /rest/api/2/myself": () => ({ status: 401, json: { errorMessages: ["nope"] } }),
+    "GET acme.atlassian.net /rest/api/3/issueLinkType": () => ({
+      json: { issueLinkTypes: [{ id: "10000", name: "Blocks", inward: "is blocked by", outward: "blocks" }] },
+    }),
+    "GET jira.corp.local /rest/api/2/issueLinkType": () => ({ status: 500, json: { errorMessages: ["unavailable"] } }),
   });
   const registry = new InstanceRegistry(app, fake.fetchImpl);
   const server = createServer(registry, app);
@@ -68,10 +72,24 @@ describe("MCP server", () => {
       "jira_create_issue",
       "jira_transition_issue",
       "jira_copy_issue",
+      "jira_list_link_types",
     ]) {
       expect(names).toContain(expected);
     }
+    expect(tools.find((tool) => tool.name === "jira_list_link_types")?.annotations?.readOnlyHint).toBe(true);
     expect(client.getInstructions()).toContain("cloud: https://acme.atlassian.net");
+  });
+
+  it("lists link types across instances without hiding failures", async () => {
+    const { client, server } = await setup();
+    cleanup = () => server.close();
+    const result = parse(await client.callTool({ name: "jira_list_link_types", arguments: { allInstances: true } }));
+    expect(result[0]).toEqual({
+      instance: "cloud",
+      linkTypes: [{ id: "10000", name: "Blocks", inward: "is blocked by", outward: "blocks" }],
+    });
+    expect(result[1]).toMatchObject({ instance: "dc", ok: false });
+    expect(result[1].error).toContain("500");
   });
 
   it("searches across every instance at once", async () => {

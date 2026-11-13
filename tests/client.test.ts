@@ -112,6 +112,27 @@ describe("JiraClient.search", () => {
   });
 });
 
+describe("JiraClient.listIssueLinkTypes", () => {
+  it("uses the Cloud and Data Center API versions", async () => {
+    const linkTypes = {
+      issueLinkTypes: [{ id: "10000", name: "Blocks", inward: "is blocked by", outward: "blocks" }],
+    };
+    const cloud = client(
+      { name: "c", url: "https://acme.atlassian.net", email: "e@x", token: "tok-123" },
+      { "GET acme.atlassian.net /rest/api/3/issueLinkType": () => ({ json: linkTypes }) },
+    );
+    const dc = client(
+      { name: "d", url: "https://jira.corp.local", token: "pat-123" },
+      { "GET jira.corp.local /rest/api/2/issueLinkType": () => ({ json: linkTypes }) },
+    );
+
+    await expect(cloud.client.listIssueLinkTypes()).resolves.toEqual(linkTypes.issueLinkTypes);
+    await expect(dc.client.listIssueLinkTypes()).resolves.toEqual(linkTypes.issueLinkTypes);
+    expect(cloud.requests[0]!.url.pathname).toBe("/rest/api/3/issueLinkType");
+    expect(dc.requests[0]!.url.pathname).toBe("/rest/api/2/issueLinkType");
+  });
+});
+
 describe("JiraClient rich text and users", () => {
   it("sends ADF on v3 and plain text on v2", () => {
     const cloud = client({ name: "c", url: "https://a.atlassian.net", email: "e@x", token: "tok-123" }, {}).client;

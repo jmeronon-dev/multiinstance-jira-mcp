@@ -1,6 +1,6 @@
 {
   "name": "multiinstance-jira-mcp",
-  "version": "0.1.0",
+  "version": "0.1.1",
   "description": "Model Context Protocol server for Jira with first-class multi-instance support: connect 1..N Jira Cloud / Data Center sites at once using API tokens, personal access tokens or browser SSO.",
   "type": "module",
   "bin": {

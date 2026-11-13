@@ -6,6 +6,10 @@ All notable changes to this project are documented here. The format follows
 
 ## [Unreleased]
 
+## [0.1.1] - 2026-11-13
+
+First version published to npm.
+
 ### Added
 
 - Agentic software factory: Issue templates (bug, enhancement, new MCP tool, software factory change), declared labels synced by `🏷️ Sync labels`, and `CODEOWNERS` for governance, credential handling and the supply chain.
@@ -23,6 +27,8 @@ All notable changes to this project are documented here. The format follows
 
 ## [0.1.0] - 2026-11-12
 
+Not published to npm.
+
 ### Added
 
 - Multi-instance support: 1..N Jira Cloud / Data Center sites in one server.
@@ -35,3 +41,6 @@ All notable changes to this project are documented here. The format follows
 - Background login that outlives tool-call timeouts, session keep-alive and cookie rotation.
 - Global and per-instance read-only mode; secret redaction in logs.
 - CLI subcommands: `serve`, `login`, `logout`, `instances`.
+
+[Unreleased]: https://github.com/jmeronon-dev/multiinstance-jira-mcp/compare/v0.1.1...HEAD
+[0.1.1]: https://github.com/jmeronon-dev/multiinstance-jira-mcp/releases/tag/v0.1.1

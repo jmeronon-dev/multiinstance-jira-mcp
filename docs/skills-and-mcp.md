@@ -22,6 +22,13 @@ Turns an approved `🧰 new-tool` Issue (fields of `new-tool.yml`) into a workin
 - **Limits:** it does not change authentication, routing or configuration loading, does not add runtime dependencies unless the Issue asks for them, and stops before opening the PR to wait for approval.
 - **Content:** `SKILL.md` and `references/procedure.md` (where things live, conventions, tests and PR checklist).
 
+### `release-version`
+
+Releases a new version of the npm package: proposes the SemVer bump from `CHANGELOG.md`, opens the release PR, creates the GitHub Release that triggers `🚀 Publish to npm`, follows the run and verifies the version on npm. The process is described in [Releasing](releasing.md).
+
+- **Limits:** it never runs `npm publish`, approves staged versions, merges PRs or handles OTPs and tokens. It asks for confirmation before the release PR and before the GitHub Release, and hands the 2FA approval on npmjs.com to a maintainer.
+- **Content:** `SKILL.md` and `references/procedure.md` (preflight, version rules, commands and recovery).
+
 ## Agent Hooks
 
 `.github/hooks/pre-pr-checks.json` runs the CI checks inside the agent session before it finishes. Details in [Guardrails](guardrails.md#agent-hooks-checks-before-the-pr).

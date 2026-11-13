@@ -6,6 +6,10 @@ All notable changes to this project are documented here. The format follows
 
 ## [Unreleased]
 
+### Added
+
+- `release-version` agent skill: prepares the release PR, creates the GitHub Release that triggers `🚀 Publish to npm`, hands the staged version to a maintainer for 2FA approval and verifies it on npm.
+
 ## [0.1.1] - 2026-11-13
 
 First version published to npm.

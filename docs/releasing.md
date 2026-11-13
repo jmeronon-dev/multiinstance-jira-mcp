@@ -16,21 +16,23 @@ Pre-releases (GitHub Releases marked as *pre-release*) are skipped. Promoting a 
 
 ## One-time setup
 
-Trusted publishing can only be configured for a package that already exists on npm, so the first version is published by hand.
+Trusted publishing can only be configured for a package that already exists on npm, so the first version is published by hand. This was done with `0.1.1` on 2026-11-13; the steps stay here in case the package has to be bootstrapped again.
 
 ### 1. Publish the first version by hand
 
 First prepare the version as in step 1 of [Release a new version](#release-a-new-version): `CHANGELOG.md` must have a section for the version in `package.json` that includes every `[Unreleased]` entry, because all of them ship in the tarball.
 
-Then, from an up-to-date default branch, with an npm account that has 2FA enabled:
+Then, from an up-to-date default branch, with an npm account that has 2FA enabled, run these commands in an interactive terminal (npm opens the browser to confirm with the security key, so an agent cannot run them):
 
 ```sh
 npm login
 npm pack --dry-run             # review the file list
 npm publish --access public    # prepublishOnly runs typecheck, test and build
-git tag v0.1.0
-git push origin v0.1.0
+git tag vx.y.z
+git push origin vx.y.z
 ```
+
+npm may stage this first publish too: the registry answers `202 Accepted`, creates a public placeholder version `0.0.0-stage` and keeps the real version in *Staged Packages* until it is approved with 2FA. The placeholder stays in the version list; `latest` moves to the approved version.
 
 This version has no provenance because it was not built in CI.
 
@@ -66,6 +68,8 @@ After the first release from CI works, set the package *Settings → Publishing 
 
 ## Release a new version
 
+Agents follow the skill [`release-version`](../.github/skills/release-version/SKILL.md), which automates these steps and stops at the human gates (approval of the release PR, merge, creation of the GitHub Release and the 2FA approval on npm).
+
 1. In a pull request, move the `## [Unreleased]` entries of `CHANGELOG.md` to a new `## [x.y.z] - YYYY-MM-DD` section and bump the version without creating a tag:
 
    ```sh
@@ -73,14 +77,14 @@ After the first release from CI works, set the package *Settings → Publishing 
    ```
 
 2. Merge the pull request.
-3. In *Releases → Draft a new release*, create the tag `vx.y.z` on the merge commit and publish the release. Create it by hand: releases created by a workflow with `GITHUB_TOKEN` do not trigger other workflows.
+3. In *Releases → Draft a new release*, create the tag `vx.y.z` on the merge commit and publish the release, or run `gh release create vx.y.z --target <merge-sha>`. Use a person's session: releases created by a workflow with `GITHUB_TOKEN` do not trigger other workflows.
 4. Wait for `🚀 Publish to npm` to finish.
-5. Approve the staged version on npmjs.com (*Staged Packages → Approve*) or with `npm stage approve <stage-id>`. Both ask for 2FA.
-6. Check the result:
+5. Approve the staged version on npmjs.com (*Staged Packages → Approve*) or with `npm stage approve <stage-id>` (npm 11.15.0 and Node.js 22.14 or later). Both ask for 2FA.
+6. Check the result (`--prefer-online` skips the local npm cache; run `npx` outside the repository):
 
    ```sh
-   npm view multiinstance-jira-mcp version
-   npx -y multiinstance-jira-mcp --version
+   npm view multiinstance-jira-mcp dist-tags --prefer-online
+   npx -y multiinstance-jira-mcp@x.y.z --version
    ```
 
 ## Troubleshooting
@@ -92,3 +96,5 @@ After the first release from CI works, set the package *Settings → Publishing 
 | `Release tag … does not match package.json version` | The version bump was not merged before the release, or the tag has a typo. Delete the release and the tag, fix it and publish again. |
 | The workflow did not run | The release is a pre-release, or it was created by a workflow with `GITHUB_TOKEN`. |
 | The trusted publisher stopped working right after creating it | It expired after 2 days without a publish. Delete it and create it again. |
+| `npm stage` is an unknown command | Update npm: `npm install -g npm@11` (11.15.0 or later, on Node.js 22.14 or later). |
+| `npm view` still shows the old version | The local npm cache answered. Add `--prefer-online`. |

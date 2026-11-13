@@ -19,7 +19,7 @@
 - `src/server.ts`: `McpServer` and the dynamic instructions sent to the assistant.
 - `tests/`: Vitest suites; `tests/helpers/fake-jira.ts` is the fake Jira router.
 - `docs/index.md`: project wiki. Read it before changing code and open only the pages relevant to the task.
-- `.github/skills/`: agent skills (`triage-issue`, `add-mcp-tool`). `docs/software-factory.md` explains how Issues flow to merged PRs.
+- `.github/skills/`: agent skills (`triage-issue`, `add-mcp-tool`, `release-version`). `docs/software-factory.md` explains how Issues flow to merged PRs; `docs/releasing.md` explains releases.
 
 ## Development and run
 

@@ -38,7 +38,7 @@ interface ToolDefinition<S extends ZodRawShape> {
   description: string;
   input: S;
   annotations?: ToolAnnotations;
-  run: (args: z.objectOutputType<S, z.ZodTypeAny>) => Promise<unknown>;
+  run: (args: z.output<z.ZodObject<S>>) => Promise<unknown>;
 }
 
 export function textResult(value: unknown): CallToolResult {
@@ -48,7 +48,7 @@ export function textResult(value: unknown): CallToolResult {
 export function defineTool<S extends ZodRawShape>(server: McpServer, name: string, def: ToolDefinition<S>): void {
   const handler = async (args: unknown): Promise<CallToolResult> => {
     try {
-      return textResult(await def.run(args as z.objectOutputType<S, z.ZodTypeAny>));
+      return textResult(await def.run(args as z.output<z.ZodObject<S>>));
     } catch (e) {
       if (!(e instanceof UserError)) log.debug(`Tool ${name} failed:`, e);
       return { isError: true, content: [{ type: "text", text: errorMessage(e) }] };

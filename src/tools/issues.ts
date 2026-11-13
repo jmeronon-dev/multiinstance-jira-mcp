@@ -17,7 +17,7 @@ import {
 } from "./shared.js";
 
 const customFieldsArg = z
-  .record(z.unknown())
+  .record(z.string(), z.unknown())
   .optional()
   .describe("Extra raw Jira fields, e.g. {\"customfield_10016\": 5}. Values are sent as-is.");
 

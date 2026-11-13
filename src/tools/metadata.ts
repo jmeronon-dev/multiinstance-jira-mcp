@@ -27,6 +27,29 @@ export function registerMetadataTools(server: McpServer, ctx: ToolContext): void
     },
   });
 
+  defineTool(server, "jira_list_link_types", {
+    title: "List issue link types",
+    description:
+      "List issue link types and their inward/outward descriptions. Supports several instances at once (instances / allInstances).",
+    input: {
+      instance: instanceArg,
+      ...fanOutArgs,
+    },
+    annotations: READ_ONLY,
+    run: async ({ instance, instances, allInstances }) => {
+      const targets = registry.select({ instance, instances, all: allInstances });
+      const results = await fanOut(targets, async (i) =>
+        (await i.client.listIssueLinkTypes()).map((linkType) => ({
+          id: linkType.id,
+          name: linkType.name,
+          inward: linkType.inward,
+          outward: linkType.outward,
+        })),
+      );
+      return results.map((r) => (r.ok ? { instance: r.instance, linkTypes: r.result } : r));
+    },
+  });
+
   defineTool(server, "jira_list_boards", {
     title: "List agile boards",
     description: "List Jira Software boards (Scrum/Kanban), optionally filtered by project or name.",

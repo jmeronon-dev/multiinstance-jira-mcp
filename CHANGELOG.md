@@ -6,6 +6,10 @@ All notable changes to this project are documented here. The format follows
 
 ## [Unreleased]
 
+### Added
+
+- `jira_list_link_types` to list issue link types across one or more Jira instances.
+
 ## [0.1.1] - 2026-11-13
 
 First version published to npm.

@@ -325,6 +325,7 @@ All tools accept `instance` unless noted otherwise. Issue parameters accept `KEY
 | Tool | Description |
 |---|---|
 | `jira_list_projects` | Projects, on one instance or several (`allInstances`). |
+| `jira_list_link_types` | Issue link types and their inward/outward descriptions, on one instance or several (`allInstances`). |
 | `jira_list_boards` / `jira_list_sprints` | Jira Software boards and sprints. |
 | `jira_list_issue_types` / `jira_list_statuses` | Issue types and statuses, globally or per project. |
 | `jira_search_users` | User search, or assignable users for a project. |
